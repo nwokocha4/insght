@@ -13,5 +13,6 @@ every choice; this note only describes the fields.
   image files, and files for sites absent from the roster are ignored.
 
 The `reference/` directory holds the governing method note
-(`camtrap_diversity_method.pdf`) and is not a case; it is excluded from
+(`camtrap_diversity_method.pdf`), the detector calibration sheet
+(`detection_calibration.csv`), and is not a case; it is excluded from
 processing.

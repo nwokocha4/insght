@@ -1,0 +1,12 @@
+section,key,value,note
+detector,model,resnet18.a1_in1k,Fixed pretrained classifier named in the method note.
+preprocessing,transform,timm resolve_data_config + create_transform is_training=False,No augmentation; note governs the exact call.
+species_register,386,elephant,ImageNet top-1 index accepted by the field protocol.
+species_register,69,trilobite,ImageNet top-1 index accepted by the field protocol.
+species_register,117,nautilus,ImageNet top-1 index accepted by the field protocol.
+species_register,401,accordion,ImageNet top-1 index accepted by the field protocol.
+species_register,355,llama,ImageNet top-1 index accepted by the field protocol.
+species_register,334,hedgehog,ImageNet top-1 index accepted by the field protocol.
+calibration,rejected_target_max_conf,0.6362,Highest target-class confidence marked rejected in validation.
+calibration,accepted_target_min_conf,0.7631,Lowest target-class confidence marked accepted in validation.
+calibration,blank_max_conf,0.2100,Highest top-1 confidence observed on blank vegetation frames.

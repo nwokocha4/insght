@@ -10,36 +10,28 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 11 0 R >> >> /Contents 4 0 R >>
 endobj
 4 0 obj
-<< /Length 1993 >>
+<< /Length 1468 >>
 stream
-BT /F1 13 Tf 72 750 Td 15 TL (1. Detection - resnet18 model, fixed preprocessing, species vocabulary and confidence threshold) Tj ET
+BT /F1 13 Tf 72 750 Td 15 TL (1. Detection and operating point) Tj ET
 BT /F1 9 Tf 72 728 Td 12 TL
-(The classifier is the resnet18 model with weights resnet18.a1_in1k, loaded from the) Tj T*
-(torchvision weights. Every frame is preprocessed identically and deterministically before it) Tj T*
-(reaches the model.) Tj T*
+(The detector is the resnet18 model with weights resnet18.a1_in1k. Every frame is decoded to) Tj T*
+(RGB and preprocessed with the model's timm data configuration \(resolve_data_config followed) Tj T*
+(by create_transform with is_training=False\). No augmentation or test-time voting is used, so) Tj T*
+(a frame has one deterministic top-1 class and softmax confidence.) Tj T*
 () Tj T*
-(Preprocessing is: resize the image to input size 224 by 224 using bicubic interpolation;) Tj T*
-(convert to a tensor; normalize each channel with mean \(0.485, 0.456, 0.406\) and standard) Tj T*
-(deviation \(0.229, 0.224, 0.225\) in red, green, blue order; then apply a center crop scaled) Tj T*
-(by 0.95. The crop scale 0.95 is applied to the 224 size. No other transform, augmentation,) Tj T*
-(or flipping is used.) Tj T*
+(The species register and the measured confidence bands are in detection_calibration.csv) Tj T*
+(beside this note. The register maps six ImageNet top-1 indices to the field labels; only) Tj T*
+(those classes are candidate detections. A frame outside the register contributes nothing.) Tj T*
 () Tj T*
-(Species vocabulary is exactly six ImageNet indices, and the species name is the ImageNet) Tj T*
-(class name: 386 elephant, 69 trilobite, 117 nautilus, 401 accordion, 355 llama, 334) Tj T*
-(hedgehog. Only these six labels are counted. A frame whose top-1 class is any index outside) Tj T*
-(this set is not a target detection and contributes nothing.) Tj T*
+(You must set the operating point from the calibration sheet, not from a familiar round) Tj T*
+(number. Compute the midpoint of rejected_target_max_conf and accepted_target_min_conf, then) Tj T*
+(round half up to the nearest 0.05. Count a candidate frame when its top-1 confidence is at) Tj T*
+(least that operating point; the comparison is inclusive. The worked check at the end shows) Tj T*
+(the arithmetic.) Tj T*
 () Tj T*
-(Confidence threshold is 0.65. The softmax probability of the top-1 class must be greater) Tj T*
-(than or equal to 0.65 for the frame to count. A detection below 0.65 counts as not detected:) Tj T*
-(it adds nothing to any species count and nothing to the site total.) Tj T*
-() Tj T*
-(Blank or vegetation frames are excluded by this threshold and never counted as a species.) Tj T*
-(Their top-1 confidences are about 0.01 to 0.21, far below 0.65, so they fail the threshold) Tj T*
-(like any other non-target frame. There is no separate blank detector and no blank class in) Tj T*
-(the vocabulary.) Tj T*
-() Tj T*
-(Each counted frame contributes exactly one count to its top-1 species, and only if that) Tj T*
-(species is in the six-label vocabulary and its confidence is at least 0.65.) Tj T*
+(Blank and vegetation frames have no separate detector. Their observed top-1 confidences top) Tj T*
+(out at blank_max_conf, below the operating point, so the same cut rejects them. Do not) Tj T*
+(invent a blank class or a second threshold.) Tj T*
 () Tj T*
 ET
 endstream
@@ -48,28 +40,26 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 11 0 R >> >> /Contents 6 0 R >>
 endobj
 6 0 obj
-<< /Length 1402 >>
+<< /Length 1314 >>
 stream
-BT /F1 13 Tf 72 750 Td 15 TL (2. Per-site aggregation and diversity estimators) Tj ET
+BT /F1 13 Tf 72 750 Td 15 TL (2. Diversity estimator selection) Tj ET
 BT /F1 9 Tf 72 728 Td 12 TL
-(Aggregation is per site. Let n be the number of counted detections at the site, meaning) Tj T*
-(frames that passed both the vocabulary and threshold rules. Let S be the number of distinct) Tj T*
-(vocabulary species counted at that site, and let count_i be the count for species i. Each) Tj T*
-(relative abundance is p_i = count_i / n.) Tj T*
+(Aggregate counted frames per site. Let n be the count of accepted detections, S the number) Tj T*
+(of distinct accepted species, and count_i the count for species i, with p_i = count_i / n.) Tj T*
 () Tj T*
-(Shannon index H = -sum\(p_i * ln\(p_i\)\), summed over the counted species, using the natural) Tj T*
-(logarithm. This is the Shannon entropy of the site species distribution.) Tj T*
+(Report Shannon entropy in nats: H = -sum\(p_i * ln p_i\). Report Simpson diversity as the) Tj T*
+(Gini-Simpson probability that two interspecific draws differ, D = 1 - sum\(p_i^2\). These are) Tj T*
+(the office standards; the base-2 entropy and inverse-Simpson forms answer different) Tj T*
+(questions and are not the reported quantities.) Tj T*
 () Tj T*
-(Simpson index D = 1 - sum\(p_i^2\), summed over the counted species. This is the Gini-Simpson) Tj T*
-(form, one minus the sum of squared relative abundances. The inverse Simpson form is not) Tj T*
-(used.) Tj T*
+(For richness, the office standard is the finite-sample bias-corrected Chao estimator ChaoBC) Tj T*
+(= S + f1*\(f1-1\)/\(2*\(f2+1\)\), where f1 and f2 count species with one and two detections. It is) Tj T*
+(selected because it stays finite when f2 = 0, a singleton-heavy profile present in the) Tj T*
+(staged data. The classic S + f1^2/\(2*f2\) has no finite value there and is not used.) Tj T*
 () Tj T*
-(Chao richness estimator, bias-corrected form: Chao = S + f1*\(f1-1\) / \(2*\(f2+1\)\), where f1 is) Tj T*
-(the number of species with count exactly 1 at that site and f2 is the number of species with) Tj T*
-(count exactly 2 at that site. The classic Chao form S + f1^2/\(2*f2\) is not used here.) Tj T*
-() Tj T*
-(All four quantities are reported per site and only per site: n, S, H, D, and Chao. Counts n,) Tj T*
-(S, f1, and f2 are integers. H, D, and Chao are reported rounded half up to four decimals.) Tj T*
+(Record these choices in /app/output/method_choices.csv with a short justification tied to) Tj T*
+(the calibration sheet or the count profile, as specified in the instruction. The record is) Tj T*
+(graded alongside the estimates.) Tj T*
 () Tj T*
 ET
 endstream
@@ -78,20 +68,21 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 11 0 R >> >> /Contents 8 0 R >>
 endobj
 8 0 obj
-<< /Length 724 >>
+<< /Length 821 >>
 stream
-BT /F1 13 Tf 72 750 Td 15 TL (3. Degenerate handling and rounding) Tj ET
+BT /F1 13 Tf 72 750 Td 15 TL (3. Degenerate sites, rounding, and output) Tj ET
 BT /F1 9 Tf 72 728 Td 12 TL
-(If n = 0, meaning no counted detections at the site, then S = 0, H = 0, D = 0, and Chao = 0.) Tj T*
-(No formula is evaluated on empty data.) Tj T*
+(If n = 0, report S = 0, H = 0, D = 0, and ChaoBC = 0. No estimator is evaluated on empty) Tj T*
+(data. Otherwise S is at least 1 and the standard forms apply directly to the observed) Tj T*
+(counts.) Tj T*
 () Tj T*
-(If n > 0, then S is at least 1 and the formulas in Section 2 apply directly to the observed) Tj T*
-(counts. Species with zero count at the site do not appear in any sum and do not add to S,) Tj T*
-(f1, or f2.) Tj T*
+(H, D, and ChaoBC are rounded half up to four decimals. Counts n and S are integers and are) Tj T*
+(never rounded. One row is written per roster site, keyed by site_id, with header) Tj T*
+(site_id,n_det,S,H,D,chao.) Tj T*
 () Tj T*
-(Rounding is half up to four decimal places for H, D, and Chao. Counts are integers and are) Tj T*
-(never rounded. Lower-confidence or off-vocabulary frames never enter n, so they never change) Tj T*
-(any of these values.) Tj T*
+(The decision record has header choice,value,justification and exactly four rows:) Tj T*
+(confidence_threshold, shannon, simpson, and chao. Its value column uses 0.70, natural_log,) Tj T*
+(gini_simpson, and bias_corrected after the selection above.) Tj T*
 () Tj T*
 ET
 endstream
@@ -100,23 +91,18 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 11 0 R >> >> /Contents 10 0 R >>
 endobj
 10 0 obj
-<< /Length 927 >>
+<< /Length 705 >>
 stream
-BT /F1 13 Tf 72 750 Td 15 TL (4. Worked check - half-up calibration example) Tj ET
+BT /F1 13 Tf 72 750 Td 15 TL (4. Worked calibration and estimator check) Tj ET
 BT /F1 9 Tf 72 728 Td 12 TL
-(Worked example matching the proto_estimators check. Species counts at one site are {A: 5, B:) Tj T*
-(3, C: 1, D: 1}. Then n = 10, S = 4, and p = \(0.5, 0.3, 0.1, 0.1\).) Tj T*
+(From detection_calibration.csv, rejected_target_max_conf = 0.6362 and) Tj T*
+(accepted_target_min_conf = 0.7631. Their midpoint is 0.69965, which rounds half up to 0.70) Tj T*
+(at 0.05 resolution. The marginal target frame at 0.6362 is therefore excluded; validated) Tj T*
+(targets at 0.7631 and above are included.) Tj T*
 () Tj T*
-(H = -\(0.5*ln 0.5 + 0.3*ln 0.3 + 0.1*ln 0.1 + 0.1*ln 0.1\) = 1.1683.) Tj T*
-() Tj T*
-(D = 1 - \(0.5^2 + 0.3^2 + 0.1^2 + 0.1^2\) = 1 - 0.36 = 0.6400.) Tj T*
-() Tj T*
-(Here f1 = 2 \(species C and D\) and f2 = 0 \(no species has count 2\). Chao bias-corrected = 4 +) Tj T*
-(2*\(2-1\)/\(2*\(0+1\)\) = 4 + 2/2 = 5.0000.) Tj T*
-() Tj T*
-(So the expected row for these counts is n = 10, S = 4, H = 1.1683, D = 0.6400, ChaoBC =) Tj T*
-(5.0000. Any implementation that reproduces these four values on these counts has the) Tj T*
-(formulas, the natural log, the Gini-Simpson form, and the bias-corrected Chao form right.) Tj T*
+(For counts {A: 5, B: 3, C: 1, D: 1}, n = 10, S = 4, p = \(0.5, 0.3, 0.1, 0.1\), H = 1.1683, D) Tj T*
+(= 0.6400, f1 = 2, f2 = 0, and ChaoBC = 4 + 2*\(2-1\)/\(2*\(0+1\)\) = 5.0000. Reproducing these) Tj T*
+(values confirms the estimator selection.) Tj T*
 () Tj T*
 ET
 endstream
@@ -131,15 +117,15 @@ xref
 0000000064 00000 n 
 0000000139 00000 n 
 0000000266 00000 n 
-0000002311 00000 n 
-0000002438 00000 n 
-0000003892 00000 n 
-0000004019 00000 n 
-0000004794 00000 n 
-0000004922 00000 n 
-0000005901 00000 n 
+0000001786 00000 n 
+0000001913 00000 n 
+0000003279 00000 n 
+0000003406 00000 n 
+0000004278 00000 n 
+0000004406 00000 n 
+0000005163 00000 n 
 trailer
 << /Size 12 /Root 1 0 R >>
 startxref
-5972
+5234
 %%EOF

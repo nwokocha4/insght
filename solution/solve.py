@@ -3,7 +3,7 @@
 Reads every case directory directly under <base>/data (excluding `reference`),
 runs each frame in <case>/images/<site_id>/*.jpg through resnet18.a1_in1k
 with preprocessing exactly from timm resolve_data_config, counts only
-vocabulary top-1 detections with confidence >= 0.65, aggregates per site,
+vocabulary detections at the calibration-derived operating point, aggregates per site,
 and writes one estimate table per case to <base>/output/<case>_estimate.csv.
 
 Base defaults to /app; override with CAMTRAP_BASE for local testing.
@@ -27,7 +27,13 @@ from PIL import Image
 BASE = os.environ.get("CAMTRAP_BASE", "/app")
 MODEL_NAME = "resnet18.a1_in1k"
 VOCAB = {386, 69, 117, 401, 355, 334}
-CONF_THRESHOLD = 0.65
+CONF_THRESHOLD = 0.70
+METHOD_CHOICES = [
+    ("confidence_threshold", "0.70", "Midpoint of rejected 0.6362 and accepted 0.7631 rounded to 0.05; inclusive cutoff."),
+    ("shannon", "natural_log", "Office standard reports entropy in nats."),
+    ("simpson", "gini_simpson", "Office standard reports the probability that two interspecific draws differ."),
+    ("chao", "bias_corrected", "Finite when f2=0, which occurs in graded_02."),
+]
 
 
 def q4(x):
@@ -124,6 +130,15 @@ def solve_case(case_dir, model, transform):
     return rows
 
 
+def write_method_choices(outdir):
+    """Write the graded record of detector and estimator selections."""
+    path = os.path.join(outdir, "method_choices.csv")
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["choice", "value", "justification"])
+        w.writerows(METHOD_CHOICES)
+
+
 def main():
     data = os.path.join(BASE, "data")
     outdir = os.path.join(BASE, "output")
@@ -151,6 +166,7 @@ def main():
             w.writeheader()
             w.writerows(rows)
         print("wrote %s (%d rows)" % (case, len(rows)))
+    write_method_choices(outdir)
 
 
 if __name__ == "__main__":

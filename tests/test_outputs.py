@@ -71,9 +71,35 @@ def _expected():
         return json.load(f)
 
 
+METHOD_CHOICES_PATH = os.path.join(OUTPUT_DIR, "method_choices.csv")
+EXPECTED_CHOICES = {
+    "confidence_threshold": ("0.70", ("0.6362", "0.7631")),
+    "shannon": ("natural_log", ("nats",)),
+    "simpson": ("gini_simpson", ("interspecific",)),
+    "chao": ("bias_corrected", ("f2",)),
+}
+
+
+def _check_method_choices():
+    """Verify the program recorded a justified choice for each method."""
+    with open(METHOD_CHOICES_PATH, newline="", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        assert reader.fieldnames == ["choice", "value", "justification"]
+        rows = list(reader)
+    got = {r["choice"]: r for r in rows}
+    assert set(got) == set(EXPECTED_CHOICES), "unexpected method choice rows"
+    for choice, (value, cues) in EXPECTED_CHOICES.items():
+        row = got[choice]
+        assert row["value"] == value, "%s value %r" % (choice, row["value"])
+        text = row["justification"].lower()
+        assert all(cue in text for cue in cues), "%s justification lacks evidence" % choice
+        assert len(row["justification"]) >= 20, "%s justification too short" % choice
+
+
 @pytest.mark.parametrize("case", _cases())
 def test_case(case):
- """Run the named graded case and verify its CSV header and every output row."""
- rows = run_case(case)
- _header_ok(case)
- check_rows(rows, _expected()[case])
+    """Run one graded case and check its rows and recorded method choices."""
+    rows = run_case(case)
+    _header_ok(case)
+    check_rows(rows, _expected()[case])
+    _check_method_choices()

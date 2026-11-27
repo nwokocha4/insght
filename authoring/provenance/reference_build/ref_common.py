@@ -67,7 +67,7 @@ def build_pdf(path, pages, title="Camtrap diversity - species detection and dive
     objs[2] = "<< /Type /Pages /Kids [%s] /Count %d >>" % (kids, n_pages)
     for (pid, cid), content in zip(page_ids, content_objs):
         objs[pid] = ("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
-            "/Resources << /Font << /F1 %d 0 R >> >> /Contents %d 0 R >>" % (font_id, cid))
+                     "/Resources << /Font << /F1 %d 0 R >> >> /Contents %d 0 R >>" % (font_id, cid))
         objs[cid] = "<< /Length %d >>\nstream\n" % len(content) + "__BYTES__" + "\nendstream"
     objs[font_id] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
 
@@ -88,86 +88,70 @@ def build_pdf(path, pages, title="Camtrap diversity - species detection and dive
         out += b"\nendobj\n"
     xref_pos = len(out)
     out += ("xref\n0 %d\n" % (max(order) + 1)).encode("ascii")
-    out += b"0000000000 65535 f \n"
+    out += "0000000000 65535 f \n".encode("ascii")
     for oid in range(1, max(order) + 1):
         out += ("%010d 00000 n \n" % offsets[oid]).encode("ascii")
     out += ("trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n"
-        % (max(order) + 1, xref_pos)).encode("ascii")
+            % (max(order) + 1, xref_pos)).encode("ascii")
     with open(path, "wb") as f:
         f.write(bytes(out))
 
 PAGES = [
-("1. Detection - resnet18 model, fixed preprocessing, species vocabulary and confidence threshold", [
-"The classifier is the resnet18 model with weights resnet18.a1_in1k, "
-"loaded from the torchvision weights. Every frame is preprocessed "
-"identically and deterministically before it reaches the model.",
-"Preprocessing is: resize the image to input size 224 by 224 using "
-"bicubic interpolation; convert to a tensor; normalize each channel "
-"with mean (0.485, 0.456, 0.406) and standard deviation "
-"(0.229, 0.224, 0.225) in red, green, blue order; then apply a "
-"center crop scaled by 0.95. The crop scale 0.95 is applied to the "
-"224 size. No other transform, augmentation, or flipping is used.",
-"Species vocabulary is exactly six ImageNet indices, and the species "
-"name is the ImageNet class name: 386 elephant, 69 trilobite, "
-"117 nautilus, 401 accordion, 355 llama, 334 hedgehog. Only these six "
-"labels are counted. A frame whose top-1 class is any index outside "
-"this set is not a target detection and contributes nothing.",
-"Confidence threshold is 0.65. The softmax probability of the top-1 "
-"class must be greater than or equal to 0.65 for the frame to count. "
-"A detection below 0.65 counts as not detected: it adds nothing to "
-"any species count and nothing to the site total.",
-"Blank or vegetation frames are excluded by this threshold and never "
-"counted as a species. Their top-1 confidences are about 0.01 to "
-"0.21, far below 0.65, so they fail the threshold like any other "
-"non-target frame. There is no separate blank detector and no "
-"blank class in the vocabulary.",
-"Each counted frame contributes exactly one count to its top-1 "
-"species, and only if that species is in the six-label vocabulary "
-"and its confidence is at least 0.65.",
+("1. Detection and operating point", [
+    "The detector is the resnet18 model with weights resnet18.a1_in1k. Every frame "
+    "is decoded to RGB and preprocessed with the model's timm data configuration "
+    "(resolve_data_config followed by create_transform with is_training=False). "
+    "No augmentation or test-time voting is used, so a frame has one deterministic "
+    "top-1 class and softmax confidence.",
+    "The species register and the measured confidence bands are in "
+    "detection_calibration.csv beside this note. The register maps six ImageNet "
+    "top-1 indices to the field labels; only those classes are candidate "
+    "detections. A frame outside the register contributes nothing.",
+    "You must set the operating point from the calibration sheet, not from a "
+    "familiar round number. Compute the midpoint of rejected_target_max_conf and "
+    "accepted_target_min_conf, then round half up to the nearest 0.05. Count a "
+    "candidate frame when its top-1 confidence is at least that operating point; "
+    "the comparison is inclusive. The worked check at the end shows the arithmetic.",
+    "Blank and vegetation frames have no separate detector. Their observed top-1 "
+    "confidences top out at blank_max_conf, below the operating point, so the same "
+    "cut rejects them. Do not invent a blank class or a second threshold.",
 ]),
-("2. Per-site aggregation and diversity estimators", [
-"Aggregation is per site. Let n be the number of counted detections "
-"at the site, meaning frames that passed both the vocabulary and "
-"threshold rules. Let S be the number of distinct vocabulary "
-"species counted at that site, and let count_i be the count for "
-"species i. Each relative abundance is p_i = count_i / n.",
-"Shannon index H = -sum(p_i * ln(p_i)), summed over the counted "
-"species, using the natural logarithm. This is the Shannon entropy "
-"of the site species distribution.",
-"Simpson index D = 1 - sum(p_i^2), summed over the counted "
-"species. This is the Gini-Simpson form, one minus the sum of "
-"squared relative abundances. The inverse Simpson form is not used.",
-"Chao richness estimator, bias-corrected form: Chao = S + "
-"f1*(f1-1) / (2*(f2+1)), where f1 is the number of species with "
-"count exactly 1 at that site and f2 is the number of species with "
-"count exactly 2 at that site. The classic Chao form S + f1^2/(2*f2) "
-"is not used here.",
-"All four quantities are reported per site and only per site: n, S, "
-"H, D, and Chao. Counts n, S, f1, and f2 are integers. H, D, and "
-"Chao are reported rounded half up to four decimals.",
+("2. Diversity estimator selection", [
+    "Aggregate counted frames per site. Let n be the count of accepted detections, "
+    "S the number of distinct accepted species, and count_i the count for species "
+    "i, with p_i = count_i / n.",
+    "Report Shannon entropy in nats: H = -sum(p_i * ln p_i). Report Simpson "
+    "diversity as the Gini-Simpson probability that two interspecific draws "
+    "differ, D = 1 - sum(p_i^2). These are the office standards; the "
+    "base-2 entropy and inverse-Simpson forms answer different questions and are "
+    "not the reported quantities.",
+    "For richness, the office standard is the finite-sample bias-corrected Chao "
+    "estimator ChaoBC = S + f1*(f1-1)/(2*(f2+1)), where f1 and f2 count species "
+    "with one and two detections. It is selected because it stays finite when "
+    "f2 = 0, a singleton-heavy profile present in the staged data. The classic "
+    "S + f1^2/(2*f2) has no finite value there and is not used.",
+    "Record these choices in /app/output/method_choices.csv with a short "
+    "justification tied to the calibration sheet or the count profile, as "
+    "specified in the instruction. The record is graded alongside the estimates.",
 ]),
-("3. Degenerate handling and rounding", [
-"If n = 0, meaning no counted detections at the site, then S = 0, "
-"H = 0, D = 0, and Chao = 0. No formula is evaluated on empty data.",
-"If n > 0, then S is at least 1 and the formulas in Section 2 apply "
-"directly to the observed counts. Species with zero count at the "
-"site do not appear in any sum and do not add to S, f1, or f2.",
-"Rounding is half up to four decimal places for H, D, and Chao. "
-"Counts are integers and are never rounded. Lower-confidence or "
-"off-vocabulary frames never enter n, so they never change any of "
-"these values.",
+("3. Degenerate sites, rounding, and output", [
+    "If n = 0, report S = 0, H = 0, D = 0, and ChaoBC = 0. No estimator is "
+    "evaluated on empty data. Otherwise S is at least 1 and the standard forms "
+    "apply directly to the observed counts.",
+    "H, D, and ChaoBC are rounded half up to four decimals. Counts n and S are "
+    "integers and are never rounded. One row is written per roster site, keyed by "
+    "site_id, with header site_id,n_det,S,H,D,chao.",
+    "The decision record has header choice,value,justification and exactly four "
+    "rows: confidence_threshold, shannon, simpson, and chao. Its value column uses "
+    "0.70, natural_log, gini_simpson, and bias_corrected after the selection above.",
 ]),
-("4. Worked check - half-up calibration example", [
-"Worked example matching the proto_estimators check. Species "
-"counts at one site are {A: 5, B: 3, C: 1, D: 1}. Then n = 10, "
-"S = 4, and p = (0.5, 0.3, 0.1, 0.1).",
-"H = -(0.5*ln 0.5 + 0.3*ln 0.3 + 0.1*ln 0.1 + 0.1*ln 0.1) = 1.1683.",
-"D = 1 - (0.5^2 + 0.3^2 + 0.1^2 + 0.1^2) = 1 - 0.36 = 0.6400.",
-"Here f1 = 2 (species C and D) and f2 = 0 (no species has count 2). "
-"Chao bias-corrected = 4 + 2*(2-1)/(2*(0+1)) = 4 + 2/2 = 5.0000.",
-"So the expected row for these counts is n = 10, S = 4, H = 1.1683, "
-"D = 0.6400, ChaoBC = 5.0000. Any implementation that reproduces "
-"these four values on these counts has the formulas, the natural "
-"log, the Gini-Simpson form, and the bias-corrected Chao form right.",
+("4. Worked calibration and estimator check", [
+    "From detection_calibration.csv, rejected_target_max_conf = 0.6362 and "
+    "accepted_target_min_conf = 0.7631. Their midpoint is 0.69965, which rounds "
+    "half up to 0.70 at 0.05 resolution. The marginal target frame at 0.6362 is "
+    "therefore excluded; validated targets at 0.7631 and above are included.",
+    "For counts {A: 5, B: 3, C: 1, D: 1}, n = 10, S = 4, p = (0.5, 0.3, 0.1, 0.1), "
+    "H = 1.1683, D = 0.6400, f1 = 2, f2 = 0, and ChaoBC = 4 + 2*(2-1)/(2*(0+1)) = "
+    "5.0000. Reproducing these values confirms the estimator selection.",
 ]),
 ]

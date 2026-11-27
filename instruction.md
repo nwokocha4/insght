@@ -1,20 +1,15 @@
 # Camera-Trap Per-Site Diversity Estimation
 
-Estimate per-site species diversity from camera-trap images with a fixed pretrained classifier. Method authority: `/app/data/reference/camtrap_diversity_method.pdf`. This brief states case, file, detection and output mechanics.
+Estimate per-site species diversity from camera-trap images. Method authority: `/app/data/reference/camtrap_diversity_method.pdf` together with `/app/data/reference/detection_calibration.csv`. This brief states case, file, and output mechanics; it deliberately does **not** restate the detector operating point, species register, or estimator forms. Read the method note and calibration sheet and make the selections they require.
 
 Cases in `/app/data` (`reference/` excluded). Each case has `sites.csv` (roster) and `images/<site_id>/*.jpg`. Read `sites.csv` for `site_id` values; each roster site gets one output row.
 
-Model: `resnet18.a1_in1k` via `timm`, `pretrained=True`, eval mode, `torch.no_grad`. Preprocessing is exactly `timm.data.resolve_data_config` plus `create_transform(..., is_training=False)` — resize 224x224 bicubic, normalize RGB mean `(0.485, 0.456, 0.406)` std `(0.229, 0.224, 0.225)`, center crop scaled by 0.95. No augmentation. Decode each image with PIL `.convert("RGB")`.
+Run the detector named in the method note with the preprocessing it prescribes, in eval mode under `torch.no_grad`. Derive the confidence operating point from the calibration sheet using the note's rule; a frame counts only when its top-1 class is in the calibrated species register and its softmax confidence meets that operating point. Frames outside the register, including blanks, add nothing.
 
-Vocabulary is exactly these six ImageNet top-1 indices: `386` elephant, `69` trilobite, `117` nautilus, `401` accordion, `355` llama, `334` hedgehog. A frame counts only if top-1 is in this set AND softmax confidence `>= 0.65` (inclusive). Otherwise it adds nothing. Blank/vegetation frames have no separate detector; they fail this threshold.
-
-Per site let `n` be counted detections, `S` distinct vocab species, `count_i` per species, `p_i = count_i / n`. Formulas (normative):
-- Shannon `H = -sum(p_i * ln(p_i))` with natural log.
-- Simpson `D = 1 - sum(p_i^2)` (Gini-Simpson, not the inverse form).
-- Chao bias-corrected `chao = S + f1*(f1-1) / (2*(f2+1))` where `f1` = #species with count 1, `f2` = #species with count 2. (Classic `S + f1^2/(2*f2)` is wrong here.)
+For each site, choose and apply the diversity estimators specified by the method note for Shannon entropy, Simpson diversity, and bias-corrected richness. The staged sites differ in singleton and doubleton structure, so use the note's selection rule rather than a familiar textbook variant. Your program must also write a short decision record justifying those choices from the calibration evidence and the count profiles.
 
 Degenerate: if `n = 0` report `S=0, H=0, D=0, chao=0`. Round `H`, `D`, `chao` half up to 4dp; `n`, `S` integers.
 
-Run `python3 /app/solve.py`; write `/app/output/<case>_estimate.csv` with header `site_id,n_det,S,H,D,chao`; key `site_id`, row order free. Missing/duplicate/unknown/nonnumeric rows fail. `H`, `D`, `chao` tolerance `0.0001`; `n_det`, `S` exact.
+Run `python3 /app/solve.py`; write `/app/output/<case>_estimate.csv` with header `site_id,n_det,S,H,D,chao`; key `site_id`, row order free. Missing/duplicate/unknown/nonnumeric rows fail. `H`, `D`, `chao` tolerance `0.0001`; `n_det`, `S` exact. Also write `/app/output/method_choices.csv` with header `choice,value,justification` and one row each for `confidence_threshold`, `shannon`, `simpson`, `chao`; the required values and justification cues are given in the method note.
 
 You have 28800 seconds to complete this task. Do not cheat by using online solutions or hints specific to this task.

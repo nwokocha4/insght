@@ -52,7 +52,7 @@ for name, oracle, variant_counts in cases:
     if "threshold" in name:
         vn, vS, vH, vD, vC, _ = est(variant_counts)
         print(f"{name}: oracle n={n} S={S} vs variant(threshold=0.50) n={vn} S={vS} gap n={vn-n} (exceeds tol: {vn!=n})")
-        rows.append({"case": name, "variant": "threshold 0.50 vs 0.65", "gap": f"n={vn-n}, S={vS-S}"})
+        rows.append({"case": name, "variant": "threshold 0.50 vs derived 0.70", "gap": f"n={vn-n}, S={vS-S}"})
     if "chao" in name:
         _, _, _, _, classic, _ = est(oracle, chao="classic")
         print(f"{name}: BC={C:.4f} vs classic={classic} gap=diverges at f2=0 (exceeds tol: True)")

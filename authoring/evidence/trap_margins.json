@@ -1,7 +1,7 @@
 [
   {
     "case": "threshold graded_01",
-    "variant": "threshold 0.50 vs 0.65",
+    "variant": "threshold 0.50 vs derived 0.70",
     "gap": "n=1, S=1"
   },
   {
