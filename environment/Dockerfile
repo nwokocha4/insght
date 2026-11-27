@@ -4,7 +4,7 @@ RUN pip install --no-cache-dir \
     torch==2.15.0+cpu \
     torchvision==0.29.2+cpu \
     --index-url https://download.pytorch.org/whl/cpu
-RUN pip install --no-cache-dir timm==1.0.31 pillow==11.3.0 numpy
+RUN pip install --no-cache-dir timm==1.0.31 pillow==11.3.0 numpy==2.1.3
 # Bake resnet18 weights into a world-readable cache so runs are offline,
 # deterministic, and usable by any uid the harness runs the program as.
 ENV HF_HOME=/opt/hf

@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir \
     torchvision==0.29.2+cpu \
     --index-url https://download.pytorch.org/whl/cpu \
  && pip install --no-cache-dir \
-    timm==1.0.31 pillow==11.3.0 numpy \
+    timm==1.0.31 pillow==11.3.0 numpy==2.1.3 \
  && pip install --no-cache-dir -r /tests/requirements.txt \
  && python -c "import timm; timm.create_model('resnet18.a1_in1k', pretrained=True); print('weights baked')" \
  && chmod -R a+rX /opt/hf
