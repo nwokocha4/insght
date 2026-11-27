@@ -73,6 +73,7 @@ def _expected():
 
 @pytest.mark.parametrize("case", _cases())
 def test_case(case):
-    rows = run_case(case)
-    _header_ok(case)
-    check_rows(rows, _expected()[case])
+ """Run the named graded case and verify its CSV header and every output row."""
+ rows = run_case(case)
+ _header_ok(case)
+ check_rows(rows, _expected()[case])
