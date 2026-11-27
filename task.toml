@@ -3,16 +3,16 @@ artifacts = ["/app/solve.py"]
 
 [task]
 name = "insight/camtrap-diversity"
-description = "Estimate per-site species diversity from camera-trap images via resnet18 detections with Shannon, Simpson and bias-corrected Chao estimators (TB-Science Science/Ecology; repo track science-ecology)"
+description = "Extract reported camera-trap mammal diversity values and citation facts from an open-access ecology data paper (TB-Science Science/Ecology; task type EXTRACT)"
 
 # Repository track science-ecology maps to TB-Science taxonomy domain Science, field Ecology.
 [metadata]
 domain = "Science"
 field = "Ecology"
 subfield = "camera-trap-diversity"
-tags = ["ecology", "cameratrap", "timm", "diversity", "chao", "shannon", "simpson"]
-expert_time_estimate_hours = 6.0
-relevant_experience = "camera-trap species monitoring with pretrained classifiers and diversity estimators"
+tags = ["ecology", "cameratrap", "extraction", "published-literature", "biodiversity"]
+expert_time_estimate_hours = 2.0
+relevant_experience = "reading tables and citation metadata in published ecology papers"
 
 [verifier]
 timeout_sec = 1800

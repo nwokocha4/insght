@@ -1,12 +1,9 @@
-"""Shared fixtures for the camtrap diversity verifier.
+"""Shared fixtures for the camtrap-diversity literature-extraction verifier.
 
-Every graded case is run in isolation as an unprivileged user against the
-paths the instruction promises: the case lands in /app/data/<case> and the
-program writes /app/output/<case>_estimate.csv. Nothing about the run
-depends on the agent having seen the verifier.
+The published PDF is staged from the verifier image into /app/data/reference,
+the submitted /app/solve.py is run as an unprivileged user, and the three
+output tables are read from /app/output. No model or network is involved.
 """
-import csv
-import json
 import os
 import shutil
 import subprocess
@@ -15,10 +12,12 @@ import sys
 import pytest
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
-GRADED_DIR = os.path.join(TESTS_DIR, "graded")
-EXPECTED_PATH = os.path.join(TESTS_DIR, "expected.json")
+REFERENCE_DIR = os.path.join(TESTS_DIR, "reference")
+PAPER_NAME = "zhao2026_camera_trap_diversity.pdf"
+
 APP_DIR = "/app"
 DATA_DIR = os.path.join(APP_DIR, "data")
+STAGED_REFERENCE = os.path.join(DATA_DIR, "reference")
 OUTPUT_DIR = os.path.join(APP_DIR, "output")
 SOLVE = os.path.join(APP_DIR, "solve.py")
 TIME_LIMIT = 600
@@ -40,29 +39,20 @@ def _drop_privileges():
         os.setuid(NOBODY)
 
 
-@pytest.fixture(scope="session")
-def expected():
-    with open(EXPECTED_PATH, encoding="utf-8") as f:
-        return json.load(f)
-
-
-@pytest.fixture(scope="session")
-def cases():
-    names = sorted(d for d in os.listdir(GRADED_DIR)
-                   if os.path.isdir(os.path.join(GRADED_DIR, d)))
-    assert names, "no graded cases present"
-    return names
-
-
 @pytest.fixture(scope="session", autouse=True)
-def app_layout():
-    os.makedirs(DATA_DIR, exist_ok=True)
+def stage_environment():
+    os.makedirs(STAGED_REFERENCE, exist_ok=True)
+    shutil.copyfile(
+        os.path.join(REFERENCE_DIR, PAPER_NAME),
+        os.path.join(STAGED_REFERENCE, PAPER_NAME),
+    )
+    if os.path.isdir(OUTPUT_DIR):
+        shutil.rmtree(OUTPUT_DIR)
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     yield
 
 
 def _ensure_app_perms():
-    # Loosen /app so an unprivileged run can write output.
     try:
         os.makedirs(APP_DIR, exist_ok=True)
         _chmod_tree(APP_DIR, 0o777, 0o755)
@@ -70,31 +60,22 @@ def _ensure_app_perms():
         pass
 
 
-def run_case(case):
-    """Run the submitted program on one graded case. Returns the loaded rows."""
+def run_solution():
+    """Run the submitted program once and return the completed process."""
     _ensure_app_perms()
     assert os.path.exists(SOLVE), "artifact /app/solve.py was not produced"
-    if os.path.isdir(DATA_DIR):
-        shutil.rmtree(DATA_DIR)
-    if os.path.isdir(OUTPUT_DIR):
-        shutil.rmtree(OUTPUT_DIR)
-    os.makedirs(DATA_DIR)
-    os.makedirs(OUTPUT_DIR)
-    shutil.copytree(os.path.join(GRADED_DIR, case), os.path.join(DATA_DIR, case))
     os.chmod(SOLVE, 0o755)
     _chmod_tree(APP_DIR, 0o777, 0o755)
-    # Privilege drop is a Linux facility; on other platforms run directly.
     kw = {"cwd": APP_DIR}
     if os.name == "posix":
         kw["preexec_fn"] = _drop_privileges
     proc = subprocess.run(
         [sys.executable, SOLVE],
-        capture_output=True, text=True, timeout=TIME_LIMIT,
-        **kw
+        capture_output=True,
+        text=True,
+        timeout=TIME_LIMIT,
+        **kw,
     )
-    out = os.path.join(OUTPUT_DIR, "%s_estimate.csv" % case)
     assert proc.returncode == 0, "program exited %d: %s" % (
         proc.returncode, (proc.stderr or "")[-3000:])
-    assert os.path.exists(out), "no output file at %s" % out
-    with open(out, newline="", encoding="utf-8-sig") as f:
-        return list(csv.DictReader(f))
+    return proc

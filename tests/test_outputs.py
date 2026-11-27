@@ -1,10 +1,8 @@
-"""Graded checks for the camtrap per-site diversity task (pytest entry).
+"""Graded checks for the camtrap-diversity literature-extraction task.
 
-Each graded case is staged fresh under /app, the submitted /app/solve.py is
-run as an unprivileged user, and every output row is keyed by site_id,
-order free. H, D and chao must each match within 1e-4; n_det and S must
-match exactly. check_rows is also imported by the authoring evidence
-scorer, so keep it dependency free.
+The submitted /app/solve.py is run once as an unprivileged user against the
+staged paper. Each output table is then checked against values transcribed
+from that paper: exact keys and strings, with a 1e-4 tolerance on decimals.
 """
 import csv
 import json
@@ -12,94 +10,80 @@ import os
 
 import pytest
 
-from conftest import EXPECTED_PATH, GRADED_DIR, OUTPUT_DIR, run_case
+from conftest import OUTPUT_DIR, run_solution
 
 TOL = 1e-4
-HEADER = ["site_id", "n_det", "S", "H", "D", "chao"]
-
-
-def _key(r):
-    return r.get("site_id", "")
-
-
-def check_rows(got, exp_rows):
-    """Compare output rows against expected rows. Returns a detail string."""
-    exp = {_key(r): r for r in exp_rows}
-    seen = {}
-    for r in got:
-        key = _key(r)
-        if key in seen:
-            raise AssertionError("duplicated key %r" % (key,))
-        seen[key] = r
-        if key not in exp:
-            raise AssertionError("unknown key %r" % (key,))
-        e = exp[key]
-        for col in ("H", "D", "chao"):
-            try:
-                gv = float(r[col])
-                ev = float(e[col])
-            except (ValueError, TypeError):
-                raise AssertionError("nonnumeric %s for %r" % (col, key))
-            if abs(gv - ev) > TOL:
-                raise AssertionError(
-                    "%s miss for %r: got %s want %s" % (col, key, gv, ev))
-        for col in ("n_det", "S"):
-            if r.get(col, "") != e[col]:
-                raise AssertionError(
-                    "%s mismatch for %r: got %r want %r"
-                    % (col, key, r.get(col), e[col]))
-    missing = set(exp) - set(seen)
-    if missing:
-        raise AssertionError("missing rows %r" % sorted(missing))
-    return "ok (%d rows)" % len(exp)
-
-
-def _header_ok(case):
-    path = os.path.join(OUTPUT_DIR, "%s_estimate.csv" % case)
-    with open(path, newline="", encoding="utf-8-sig") as f:
-        header = next(csv.reader(f))
-    assert header == HEADER, "header mismatch in %s: %r" % (case, header)
-
-
-def _cases():
-    return sorted(d for d in os.listdir(GRADED_DIR)
-                  if os.path.isdir(os.path.join(GRADED_DIR, d)))
-
-
-def _expected():
-    with open(EXPECTED_PATH, encoding="utf-8") as f:
-        return json.load(f)
-
-
-METHOD_CHOICES_PATH = os.path.join(OUTPUT_DIR, "method_choices.csv")
-EXPECTED_CHOICES = {
-    "confidence_threshold": ("0.70", ("0.6362", "0.7631")),
-    "shannon": ("natural_log", ("nats",)),
-    "simpson": ("gini_simpson", ("interspecific",)),
-    "chao": ("bias_corrected", ("f2",)),
+TABLES = {
+    "altitude_diversity": ["altitude_zone", "cameras", "shannon_weiner", "pielou", "simpson"],
+    "species_detections": ["species", "independent_photos"],
+    "source_citation": ["field", "value"],
+}
+NUMERIC = {
+    "altitude_diversity": {"cameras", "shannon_weiner", "pielou", "simpson"},
+    "species_detections": {"independent_photos"},
+    "source_citation": set(),
+}
+KEYS = {
+    "altitude_diversity": "altitude_zone",
+    "species_detections": "species",
+    "source_citation": "field",
 }
 
 
-def _check_method_choices():
-    """Verify the program recorded a justified choice for each method."""
-    with open(METHOD_CHOICES_PATH, newline="", encoding="utf-8-sig") as f:
-        reader = csv.DictReader(f)
-        assert reader.fieldnames == ["choice", "value", "justification"]
-        rows = list(reader)
-    got = {r["choice"]: r for r in rows}
-    assert set(got) == set(EXPECTED_CHOICES), "unexpected method choice rows"
-    for choice, (value, cues) in EXPECTED_CHOICES.items():
-        row = got[choice]
-        assert row["value"] == value, "%s value %r" % (choice, row["value"])
-        text = row["justification"].lower()
-        assert all(cue in text for cue in cues), "%s justification lacks evidence" % choice
-        assert len(row["justification"]) >= 20, "%s justification too short" % choice
+@pytest.fixture(scope="session")
+def expected():
+    with open(os.path.join(os.path.dirname(__file__), "expected.json"), encoding="utf-8") as f:
+        return json.load(f)
 
 
-@pytest.mark.parametrize("case", _cases())
-def test_case(case):
-    """Run one graded case and check its rows and recorded method choices."""
-    rows = run_case(case)
-    _header_ok(case)
-    check_rows(rows, _expected()[case])
-    _check_method_choices()
+@pytest.fixture(scope="session")
+def outputs():
+    run_solution()
+    loaded = {}
+    for name in TABLES:
+        path = os.path.join(OUTPUT_DIR, "%s.csv" % name)
+        assert os.path.exists(path), "missing output %s" % path
+        with open(path, newline="", encoding="utf-8-sig") as f:
+            reader = csv.DictReader(f)
+            assert reader.fieldnames == TABLES[name], "%s header mismatch: %r" % (
+                name, reader.fieldnames)
+            loaded[name] = list(reader)
+    return loaded
+
+
+def check_rows(name, got, want):
+    key = KEYS[name]
+    numeric = NUMERIC[name]
+    exp = {row[key]: row for row in want}
+    seen = set()
+    for row in got:
+        k = row.get(key, "")
+        assert k in exp, "%s has unknown key %r" % (name, k)
+        assert k not in seen, "%s has duplicate key %r" % (name, k)
+        seen.add(k)
+        for col, expected_value in exp[k].items():
+            actual = row.get(col, "")
+            if col in numeric:
+                try:
+                    ok = abs(float(actual) - float(expected_value)) <= TOL
+                except (TypeError, ValueError):
+                    ok = False
+                assert ok, "%s %s %s: got %r want %s" % (
+                    name, k, col, actual, expected_value)
+            else:
+                assert actual == expected_value, "%s %s %s: got %r want %r" % (
+                    name, k, col, actual, expected_value)
+    assert seen == set(exp), "%s missing keys %r" % (
+        name, sorted(set(exp) - seen))
+
+
+def test_altitude_diversity(outputs, expected):
+    check_rows("altitude_diversity", outputs["altitude_diversity"], expected["altitude_diversity"])
+
+
+def test_species_detections(outputs, expected):
+    check_rows("species_detections", outputs["species_detections"], expected["species_detections"])
+
+
+def test_source_citation(outputs, expected):
+    check_rows("source_citation", outputs["source_citation"], expected["source_citation"])

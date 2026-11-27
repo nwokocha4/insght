@@ -1,24 +1,23 @@
-# Camera-Trap Diversity Estimation
+# Camera-Trap Diversity Literature Extraction
 
-Taxonomy: TB-Science domain `Science`, field `Ecology`; repository track `science-ecology` (camera-trap biodiversity monitoring).
+Taxonomy: TB-Science domain `Science`, field `Ecology`; repository track `science-ecology` (camera-trap biodiversity monitoring). Task type: `EXTRACT`.
 
-Ecologist brief. The agent must read the governing method note and detector calibration sheet, choose a defensible operating point and estimator set for each site's count profile, and report per-site Shannon, Simpson and bias-corrected Chao estimates. The instruction deliberately withholds the numeric cutoff, species register and formula variants; those must be derived from the method authority and calibration evidence.
+Literature-extraction brief. The agent receives one real, open-access data paper as a PDF and must recover reported tabular values and citation facts from it. The task does not train or run a classifier and does not ask for recomputed diversity indices; the graded answer is the published content itself.
+
+## Source
+
+Zhao W, Li M-M, Yan X-R, Zhang Z, Chen X-C, Chang Z-Q, Chen J-L, Ma J-J, Xu Z-P, Chen J-M, Lee PS, Zhang F (2026). “Camera trap survey of mammal diversity and activity rhythms of threatened species in a subtropical forest of Huangshan Mountain, China.” *Biodiversity Data Journal* 14: e184017. DOI `10.3897/BDJ.14.e184017`. CC BY 4.0.
+
+The canonical PDF is kept in `authoring/evidence/` and copied into both the task image (`environment/data/reference/`) and the verifier image (`tests/reference/`) so the run is fully offline. No author-written method note or synthetic calibration sheet is shipped.
 
 ## Difficulty
 
-The graded cases make four decisions observable, with each wrong choice moving a reported value far beyond the `0.0001` tolerance (measured margins in `authoring/evidence/trap_margins.json`):
-
-1. **Operating point from calibration.** `detection_calibration.csv` places the largest rejected target confidence at `0.6362` and the smallest accepted target at `0.7631`. The method note requires the midpoint rounded to `0.05`, giving `0.70`. Lowering the cutoff to `0.50` counts the marginal frame in `graded_01`, moving its site from `n=4, S=2` to `n=5, S=3`. A solver that guesses a round number rather than reading the calibration sheet fails.
-2. **Richness estimator for singleton-heavy data.** `graded_02` has `f1=2, f2=0`: the bias-corrected form gives `chao=5.0000` while the classic form is undefined. The agent must select the finite variant and justify it from the count profile.
-3. **Simpson definition.** `graded_03` (counts `4,4,2,2`) distinguishes Gini-Simpson `D=0.7222` from inverse Simpson `3.6000`, a gap of `2.8778`.
-4. **Shannon base.** `graded_04` (counts `6,2,1,1`) distinguishes natural-log `H=1.0889` from base-2 `1.5710`, a gap of `0.4821`.
-
-`graded_05` carries three blank frames beside four detections and `graded_06` carries an empty site beside a single-detection site, so a program that misapplies the operating point or mishandles `n=0` fails visibly. Preprocessing is fixed by the method note to keep the classifier deterministic; it is not claimed as a scientific decision.
+The paper embeds its numbers in two dense tables. Table 2 reports altitude-stratified Shannon-Weiner, Pielou, and Simpson values that differ by only a few hundredths between zones, so an agent must locate the correct row and preserve the printed precision. Table 1 splits scientific names, common names, IUCN codes, and counts across wrapped lines; the Reeves's Muntjac count continues onto the following line after the species name. The citation fields require reading the first page rather than guessing a DOI or journal from the topic.
 
 ## Reference solution
 
-`solution/solve.py` loads the named pretrained model, applies the method note's preprocessing, derives the operating point from the calibration bands, counts only calibrated species above that cutoff, and writes per-site rows using the selected estimators. It also writes `/app/output/method_choices.csv`, recording each choice with a short evidence-based justification. `solution/solve.sh` stages the reference and smoke-runs it on the settled cases. `authoring/provenance/reference_build/build_reference.py` regenerates the method PDF from the embedded pages.
+`solution/solve.py` uses `pypdf` to extract text from the shipped PDF, applies anchored patterns to the Table 2 and Table 1 rows, reads the DOI, year, and title from the cover page, and writes the three required CSVs. `solution/solve.sh` stages the reference and smoke-runs it against the staged paper.
 
 ## Verification
 
-`tests/test_outputs.py` stages each graded case fresh under `/app`, runs the submitted `/app/solve.py` as an unprivileged user, keys every output row by `site_id` with order free, and checks both the estimate table and the decision record. `H`, `D`, and `chao` must match within `0.0001`; `n_det` and `S` must match exactly; each recorded choice and its justification cue must be present. `tests/expected.json` holds the oracle rows. `tests/test.sh` runs the suite, emits CTRF, and writes the reward to `/logs/verifier/reward.txt`. Reward is 1 only when every check on every case passes.
+`tests/conftest.py` stages the paper under `/app/data/reference/`, runs the submitted `/app/solve.py` as an unprivileged user, and loads the three output tables. `tests/test_outputs.py` checks headers, exact keys, decimal values within `0.0001`, and exact citation strings. `tests/expected.json` holds the values transcribed from the paper. `tests/test.sh` emits CTRF and writes the reward to `/logs/verifier/reward.txt`. Reward is 1 only when every check passes.

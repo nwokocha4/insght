@@ -1,172 +1,99 @@
-"""Camtrap per-site diversity estimation from resnet18 species detections.
+"""Reference extractor for the published camera-trap diversity data paper.
 
-Reads every case directory directly under <base>/data (excluding `reference`),
-runs each frame in <case>/images/<site_id>/*.jpg through resnet18.a1_in1k
-with preprocessing exactly from timm resolve_data_config, counts only
-vocabulary detections at the calibration-derived operating point, aggregates per site,
-and writes one estimate table per case to <base>/output/<case>_estimate.csv.
+Reads the shipped PDF of Zhao et al. (2026), extracts the altitude-stratified
+alpha-diversity values from Table 2, the focal species detection counts from
+Table 1, and the citation fields from the first page. It writes the three
+structured CSVs required by the instruction under <base>/output.
 
 Base defaults to /app; override with CAMTRAP_BASE for local testing.
-Method authority: environment/data/reference/camtrap_diversity_method.pdf.
-
-Deterministic: single pass, no test-time augmentation, model in eval mode,
-torch.no_grad, every image decoded and preprocessed identically.
+No network access or model inference is used.
 """
-
 import csv
-import math
 import os
-from collections import Counter
-from decimal import Decimal, ROUND_HALF_UP
+import re
 
-import torch
-import timm
-from timm.data import create_transform, resolve_data_config
-from PIL import Image
+from pypdf import PdfReader
 
 BASE = os.environ.get("CAMTRAP_BASE", "/app")
-MODEL_NAME = "resnet18.a1_in1k"
-VOCAB = {386, 69, 117, 401, 355, 334}
-CONF_THRESHOLD = 0.70
-METHOD_CHOICES = [
-    ("confidence_threshold", "0.70", "Midpoint of rejected 0.6362 and accepted 0.7631 rounded to 0.05; inclusive cutoff."),
-    ("shannon", "natural_log", "Office standard reports entropy in nats."),
-    ("simpson", "gini_simpson", "Office standard reports the probability that two interspecific draws differ."),
-    ("chao", "bias_corrected", "Finite when f2=0, which occurs in graded_02."),
-]
+PAPER = os.path.join(BASE, "data", "reference", "zhao2026_camera_trap_diversity.pdf")
+ALTITUDE_HEADER = ["altitude_zone", "cameras", "shannon_weiner", "pielou", "simpson"]
+SPECIES_HEADER = ["species", "independent_photos"]
+CITATION_HEADER = ["field", "value"]
 
 
-def q4(x):
-    return Decimal(str(x)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
+def paper_text(path):
+    reader = PdfReader(path)
+    return "\n".join((page.extract_text() or "") for page in reader.pages)
 
 
-def read_site_ids(case_dir):
-    path = os.path.join(case_dir, "sites.csv")
-    with open(path, newline="", encoding="utf-8-sig") as f:
-        rows = list(csv.DictReader(f))
-    return sorted({(r.get("site_id") or "").strip() for r in rows} - {""})
+def first_page_text(path):
+    return PdfReader(path).pages[0].extract_text() or ""
 
 
-def load_model():
-    model = timm.create_model(MODEL_NAME, pretrained=True)
-    model.eval()
-    config = resolve_data_config({}, model=model)
-    transform = create_transform(**config, is_training=False)
-    return model, transform
+def require(pattern, text, label, flags=0):
+    match = re.search(pattern, text, flags)
+    if not match:
+        raise RuntimeError("could not extract %s from the paper" % label)
+    return match
 
 
-def site_image_paths(case_dir, site_id):
-    folder = os.path.join(case_dir, "images", site_id)
-    if not os.path.isdir(folder):
-        return []
-    return sorted(
-        os.path.join(folder, name)
-        for name in os.listdir(folder)
-        if name.lower().endswith(".jpg")
-        and os.path.isfile(os.path.join(folder, name))
-    )
+def clean_int(raw):
+    return raw.replace(",", "")
 
 
-def classify_images(model, transform, paths):
-    """Yield (top1_index, top1_confidence) for each image path."""
-    for path in paths:
-        with Image.open(path) as img:
-            tensor = transform(img.convert("RGB")).unsqueeze(0)
-        with torch.no_grad():
-            probs = torch.softmax(model(tensor), dim=1)[0]
-        top1 = int(torch.argmax(probs).item())
-        conf = float(probs[top1].item())
-        yield top1, conf
-
-
-def diversity_row(site_id, counts):
-    n = sum(counts.values())
-    S = len(counts)
-    if n == 0:
-        return {
-            "site_id": site_id,
-            "n_det": "0",
-            "S": "0",
-            "H": "0.0000",
-            "D": "0.0000",
-            "chao": "0.0000",
-        }
-    H = 0.0
-    D = 0.0
-    f1 = 0
-    f2 = 0
-    for c in counts.values():
-        p = c / n
-        H -= p * math.log(p)
-        if c == 1:
-            f1 += 1
-        elif c == 2:
-            f2 += 1
-    D = 1.0 - sum((c / n) ** 2 for c in counts.values())
-    chao = S + f1 * (f1 - 1) / (2 * (f2 + 1))
-    return {
-        "site_id": site_id,
-        "n_det": str(n),
-        "S": str(S),
-        "H": format(q4(H), ".4f"),
-        "D": format(q4(D), ".4f"),
-        "chao": format(q4(chao), ".4f"),
-    }
-
-
-def solve_case(case_dir, model, transform):
+def extract_altitude(text):
     rows = []
-    for site_id in read_site_ids(case_dir):
-        paths = site_image_paths(case_dir, site_id)
-        counts = Counter()
-        for top1, conf in classify_images(model, transform, paths):
-            if top1 not in VOCAB:
-                continue
-            if conf < CONF_THRESHOLD:
-                continue
-            counts[top1] += 1
-        rows.append(diversity_row(site_id, counts))
-    rows.sort(key=lambda r: r["site_id"])
+    patterns = [
+        ("low", r"Low altitude \(400[-–]\d+ m\)\s+(\d+)\s+(\d+\.\d+)\s+(\d+\.\d+)\s+(\d+\.\d+)"),
+        ("mid", r"Mid[-– ]altitude \(780[-–]\d[\d,]* m\)\s+(\d+)\s+(\d+\.\d+)\s+(\d+\.\d+)\s+(\d+\.\d+)"),
+    ]
+    for zone, pattern in patterns:
+        m = require(pattern, text, "Table 2 " + zone + " row")
+        cameras, shannon, pielou, simpson = m.groups()
+        rows.append([zone, cameras, shannon, pielou, simpson])
     return rows
 
 
-def write_method_choices(outdir):
-    """Write the graded record of detector and estimator selections."""
-    path = os.path.join(outdir, "method_choices.csv")
+def extract_species(text):
+    reeves = require(r"Reeves'?s\s+Muntjac\s+LC\s+-\s+([\d,]+)", text, "Reeves's Muntjac count")
+    boar = require(r"Wild Boar\s+LC\s+-\s+([\d,]+)", text, "Wild Boar count")
+    return [
+        ["reeves_muntjac", clean_int(reeves.group(1))],
+        ["wild_boar", clean_int(boar.group(1))],
+    ]
+
+
+def extract_citation(text, cover):
+    doi = require(r"doi:\s*(10\.\d{4,9}/[^\s]+)", cover, "DOI").group(1)
+    year = require(r"Published:\s+\d{1,2}\s+\w+\s+(\d{4})", cover, "publication year").group(1)
+    title_match = require(r"Data Paper\s+(.*?)\s+Wei Zhao", cover, "title", re.S)
+    title = re.sub(r"\s+", " ", title_match.group(1)).strip()
+    return [
+        ["title", title],
+        ["doi", doi],
+        ["year", year],
+        ["journal", "Biodiversity Data Journal"],
+    ]
+
+
+def write_csv(path, header, rows):
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
-        w.writerow(["choice", "value", "justification"])
-        w.writerows(METHOD_CHOICES)
+        w.writerow(header)
+        w.writerows(rows)
 
 
 def main():
-    data = os.path.join(BASE, "data")
+    if not os.path.exists(PAPER):
+        raise FileNotFoundError("missing source paper at %s" % PAPER)
     outdir = os.path.join(BASE, "output")
     os.makedirs(outdir, exist_ok=True)
-    cases = sorted(
-        d
-        for d in os.listdir(data)
-        if os.path.isdir(os.path.join(data, d)) and d != "reference"
-    )
-    if not cases:
-        print("no cases under %s" % data)
-        return
-    model, transform = load_model()
-    for case in cases:
-        rows = solve_case(os.path.join(data, case), model, transform)
-        with open(
-            os.path.join(outdir, "%s_estimate.csv" % case),
-            "w",
-            newline="",
-            encoding="utf-8",
-        ) as f:
-            w = csv.DictWriter(
-                f, fieldnames=["site_id", "n_det", "S", "H", "D", "chao"]
-            )
-            w.writeheader()
-            w.writerows(rows)
-        print("wrote %s (%d rows)" % (case, len(rows)))
-    write_method_choices(outdir)
+    text = paper_text(PAPER)
+    cover = first_page_text(PAPER)
+    write_csv(os.path.join(outdir, "altitude_diversity.csv"), ALTITUDE_HEADER, extract_altitude(text))
+    write_csv(os.path.join(outdir, "species_detections.csv"), SPECIES_HEADER, extract_species(text))
+    write_csv(os.path.join(outdir, "source_citation.csv"), CITATION_HEADER, extract_citation(text, cover))
+    print("wrote three extraction tables to %s" % outdir)
 
 
 if __name__ == "__main__":

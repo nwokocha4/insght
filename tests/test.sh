@@ -1,7 +1,7 @@
 #!/bin/sh
-# Verifier entrypoint: run the graded checks and emit CTRF for the pipeline.
+# Verifier entrypoint: run the graded extraction checks and emit CTRF.
 # The harness reads the verdict from /logs/verifier/reward.txt, so it must be
-# written on every path: 1 only when every row of every case passes, else 0.
+# written on every path: 1 only when every table passes, else 0.
 set -e
 cd /tests
 mkdir -p /logs/verifier

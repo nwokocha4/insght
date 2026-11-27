@@ -1,78 +1,46 @@
 {
- "graded_01": [
-  {
-   "D": "0.5000",
-   "H": "0.6931",
-   "S": "2",
-   "chao": "2.0000",
-   "n_det": "4",
-   "site_id": "site_a"
-  },
-  {
-   "D": "0.4800",
-   "H": "0.6730",
-   "S": "2",
-   "chao": "2.0000",
-   "n_det": "5",
-   "site_id": "site_b"
-  }
- ],
- "graded_02": [
-  {
-   "D": "0.6400",
-   "H": "1.1683",
-   "S": "4",
-   "chao": "5.0000",
-   "n_det": "10",
-   "site_id": "site_a"
-  }
- ],
- "graded_03": [
-  {
-   "D": "0.7222",
-   "H": "1.3297",
-   "S": "4",
-   "chao": "4.0000",
-   "n_det": "12",
-   "site_id": "site_a"
-  }
- ],
- "graded_04": [
-  {
-   "D": "0.5800",
-   "H": "1.0889",
-   "S": "4",
-   "chao": "4.5000",
-   "n_det": "10",
-   "site_id": "site_a"
-  }
- ],
- "graded_05": [
-  {
-   "D": "0.5000",
-   "H": "0.6931",
-   "S": "2",
-   "chao": "2.0000",
-   "n_det": "4",
-   "site_id": "site_a"
-  }
- ],
- "graded_06": [
-  {
-   "D": "0.0000",
-   "H": "0.0000",
-   "S": "0",
-   "chao": "0.0000",
-   "n_det": "0",
-   "site_id": "site_empty"
-  },
-  {
-   "D": "0.0000",
-   "H": "0.0000",
-   "S": "1",
-   "chao": "1.0000",
-   "n_det": "1",
-   "site_id": "site_single"
-  }
- ]
+  "altitude_diversity": [
+    {
+      "altitude_zone": "low",
+      "cameras": "16",
+      "shannon_weiner": "1.610",
+      "pielou": "0.594",
+      "simpson": "0.309"
+    },
+    {
+      "altitude_zone": "mid",
+      "cameras": "16",
+      "shannon_weiner": "1.687",
+      "pielou": "0.639",
+      "simpson": "0.259"
+    }
+  ],
+  "species_detections": [
+    {
+      "species": "reeves_muntjac",
+      "independent_photos": "3480"
+    },
+    {
+      "species": "wild_boar",
+      "independent_photos": "1420"
+    }
+  ],
+  "source_citation": [
+    {
+      "field": "title",
+      "value": "Camera trap survey of mammal diversity and activity rhythms of threatened species in a subtropical forest of Huangshan Mountain, China"
+    },
+    {
+      "field": "doi",
+      "value": "10.3897/BDJ.14.e184017"
+    },
+    {
+      "field": "year",
+      "value": "2026"
+    },
+    {
+      "field": "journal",
+      "value": "Biodiversity Data Journal"
+    }
+  ]
 }
